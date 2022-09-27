@@ -41,7 +41,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tokio::io::{unix::AsyncFd, AsyncRead, AsyncFdReadyGuard, AsyncWrite, ReadBuf};
+use tokio::io::{unix::AsyncFd, AsyncRead, unix::AsyncFdReadyGuard, AsyncWrite, ReadBuf};
 
 pub use crate::sys::{l2cap_conninfo as ConnInfo, l2cap_options as Opts};
 
