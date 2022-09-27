@@ -41,7 +41,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tokio::io::{unix::AsyncFd, AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::{unix::AsyncFd, AsyncRead, AsyncFdReadyGuard, AsyncWrite, ReadBuf};
 
 pub use crate::sys::{l2cap_conninfo as ConnInfo, l2cap_options as Opts};
 
@@ -430,6 +430,16 @@ impl<Type> Socket<Type> {
         Ok(Self { fd: AsyncFd::new(fd)?, _type: PhantomData })
     }
 
+    #[allow(clippy::needless_lifetimes)] // The lifetime improves rustdoc rendering.
+    pub(crate) async fn readable<'a>(&'a self) -> Result<AsyncFdReadyGuard<'a, OwnedFd>> {
+        self.fd.readable().await
+    }
+
+    #[allow(clippy::needless_lifetimes)] // The lifetime improves rustdoc rendering.
+    pub(crate) async fn writable<'a>(&'a self) -> Result<AsyncFdReadyGuard<'a, OwnedFd>> {
+        self.fd.writable().await
+    }
+
     sock_priv!();
 }
 
@@ -700,6 +710,32 @@ impl Stream {
     pub unsafe fn from_raw_fd(fd: RawFd) -> Result<Self> {
         Self::from_socket(Socket::from_raw_fd(fd)?)
     }
+
+    /// Waits for the file descriptor to become readable, returning a
+    /// [`AsyncFdReadyGuard`] that must be dropped to resume read-readiness
+    /// polling.
+    ///
+    /// This method takes `&self`, so it is possible to call this method
+    /// concurrently with other methods on this struct. This method only
+    /// provides shared access to the inner IO resource when handling the
+    /// [`AsyncFdReadyGuard`].
+    #[allow(clippy::needless_lifetimes)] // The lifetime improves rustdoc rendering.
+    pub async fn readable<'a>(&'a self) -> Result<AsyncFdReadyGuard<'a, OwnedFd>> {
+        self.socket.readable().await
+    }
+
+    /// Waits for the file descriptor to become writable, returning a
+    /// [`AsyncFdReadyGuard`] that must be dropped to resume write-readiness
+    /// polling.
+    ///
+    /// This method takes `&self`, so it is possible to call this method
+    /// concurrently with other methods on this struct. This method only
+    /// provides shared access to the inner IO resource when handling the
+    /// [`AsyncFdReadyGuard`].
+    #[allow(clippy::needless_lifetimes)] // The lifetime improves rustdoc rendering.
+    pub async fn writable<'a>(&'a self) -> Result<AsyncFdReadyGuard<'a, OwnedFd>> {
+        self.socket.writable().await
+    }
 }
 
 impl AsRef<Socket<Stream>> for Stream {
@@ -835,6 +871,7 @@ impl SeqPacket {
         let socket = Socket::<SeqPacket>::new_seq_packet()?;
         socket.bind(any_bind_addr(&addr))?;
         socket.connect(addr).await
+
     }
 
     /// Gets the peer address of this stream.
